@@ -1,0 +1,210 @@
+
+<!--obtained map projection script https://bl.ocks.org/mbostock/3711652 -->
+<!--http://stage-155.brilliant-data.net/webdataconnectors/maps.html-->
+<!DOCTYPE html>
+<html>
+<head>
+<!-- adapated from https://bl.ocks.org/mbostock/4062045 -->
+<meta charset="utf-8">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+<style>
+
+body {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid lightgray;
+}
+
+.center {
+    text-align: center;
+}
+
+.btn-info {
+    background: #146c36;
+    border: #146c36;
+    margin: 0.1rem;
+    width: 156px;
+}
+
+.btn-info:hover, .btn-info:active, .btn-info:focus {
+    background: #044c16;
+    border: #044c16;
+}
+
+.headline {
+    color: #4B9C53;
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: bold;
+    margin-bottom: 30px;
+}
+
+.btn-default {
+    background: #7CB257;
+    border-color: #39864D;
+    color: white;
+}
+
+.btn-default.active, .btn-default:hover, .btn-default:active, .btn-default:focus {
+    background: #39864D;
+    border-color: #39864D;
+    color: white;
+}
+
+.button-row {
+    margin-bottom: 30px;
+}
+
+.data-table-row {
+    margin: 20px;
+    overflow-x: scroll;
+    overflow-y: scroll;
+    height: 277px;
+}
+
+</style>
+</head>
+
+<body>
+
+    <div class="row center">
+        <h2 class="headline">JavaScript API without Embedding</h2>
+    </div>
+    <div class="row center button-row">
+        <button class="btn btn-default" onclick="onUnderlyingDataClicked()">Underlying Data</button>
+        <button class="btn btn-default" onclick="onCurrentSelectionClicked()">Current Selection</button>
+        <button class="btn btn-default" onclick="onCurrentFiltersClicked()">Current Filter</button>
+    </div>
+
+    <div class="row data-table-row">
+        <table class="table table-hover" id="underlyingDataTable">
+        </table>
+        <table class="table table-hover" id="currentSelectionTable">
+        </table>
+        <table class="table table-hover" id="currentFilterTable">
+        </table>
+    </div>
+
+
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="http://stage-155.brilliant-data.net/javascripts/api/tableau-2.1.1.min.js"></script>
+    <script src="https://code.jquery.com/jquery-1.10.2.js"></script> 
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>
+    <script type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+    <script src="tableauLib.js"></script>
+    <script>
+        var TBLib = new TableauLib();
+        var worksheet = TBLib.getCurrentWorksheet();
+        
+        // Click handlers
+        function onUnderlyingDataClicked() {
+            hideOtherTables();
+            queryUnderlyingData(true, onUnderlyingDataSuccess);
+        }
+
+        function onCurrentSelectionClicked() {
+            hideOtherTables();
+            queryUnderlyingData(false, onCurrentSelectionSuccess);
+        }
+
+        function onCurrentFiltersClicked() {
+            hideOtherTables();
+            queryCurrentFilters(onCurrentFiltesSuccess);
+        }
+
+        // Query functions
+        function queryUnderlyingData(ignoreSelection, cb) {
+            worksheet.getUnderlyingDataAsync({
+                maxRows: 0,
+                ignoreSelection: ignoreSelection,
+                includeAllColumns: true,
+                ignoreAliases: true
+            }).then(cb, onDataLoadError);
+        }
+
+        function queryCurrentFilters(cb) {
+            worksheet.getFiltersAsync().then(cb);
+        }
+
+        // Callback functions
+        function onDataLoadError(err) {
+            return console.error("Error during Tableau Async request:", err);
+        }
+
+        function onUnderlyingDataSuccess(table) {
+            var tableData = table.getData();
+            var tableCols = table.getColumns();
+            buildHTMLTableFromDataArray(tableCols, tableData, "underlyingDataTable");
+        }
+
+        function onCurrentSelectionSuccess(table) {
+            var tableData = table.getData();
+            var tableCols = table.getColumns();
+            buildHTMLTableFromDataArray(tableCols, tableData, "currentSelectionTable");
+        }
+
+        function onCurrentFiltesSuccess(table) {
+            buildFiltersTableFromTableData(table, "currentFilterTable");
+        }  
+
+        // DOM manipulators
+        function buildHTMLTableFromDataArray(tableCols, tableData, tableId) {
+            var table = $('#'+tableId);
+            table.empty();
+
+            var tableHeading = '<tr>';
+            tableCols.forEach( col => {
+                tableHeading += '<th>' + col.getFieldName() + '</th>';
+            });
+            tableHeading += '</tr>';
+            table.append(tableHeading);
+
+            tableData.forEach( row => {
+                var rowHTML = '';
+
+                rowHTML += '<tr>';
+                row.forEach( col => {
+                    rowHTML += '<td>' + col.formattedValue + '</td>';
+                });
+                rowHTML += '</tr>';
+
+                table.append(rowHTML);
+            } );
+
+            table.show();
+        }
+
+        function buildFiltersTableFromTableData(table, tableId) {
+            var tableHtml = $('#' + tableId);
+            tableHtml.empty();
+
+            var row = '';
+            
+            row += '<tr>';
+            row += '<th>Worksheet Name</th>';
+            row += '<th>Filter Type</th>';
+            row += '<th>Field Name</th>';
+            row += '</tr>';   
+            tableHtml.append(row);
+
+            for (var i = 0; i < table.length; i++) {
+                row = '<tr>';
+                row += '<td>' + table[i].getWorksheet().getName() + '</td>';
+                row += '<td>' + table[i].getFilterType() + '</td>';
+                row += '<td>' + table[i].getFieldName() + '</td>';
+                row += '</tr>';   
+                tableHtml.append(row);
+            }
+
+            tableHtml.show();
+        }
+
+        function hideOtherTables() {
+            $('table').hide();
+        }
+
+
+    </script>
+</body>
+</html>
